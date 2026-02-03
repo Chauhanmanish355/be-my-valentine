@@ -68,7 +68,7 @@
       justify-content:center;
       align-items:center;
       margin-top:6px;
-      position:relative; /* keep layout for yes button and serve as positioning parent */
+      position:relative; /* keep layout for yes button */
       height:56px; /* space for moving button */
     }
 
@@ -99,7 +99,7 @@
       position:relative; /* will be set to absolute when moving */
       min-width:120px;
       /* Smooth position transitions when we move it */
-      transition: left .28s ease, top .28s ease, transform .12s ease;
+      transition: left .32s cubic-bezier(.2,.9,.2,1), top .32s cubic-bezier(.2,.9,.2,1), transform .12s ease;
     }
 
     /* celebration style for the final message */
@@ -167,6 +167,8 @@
 
       // Ensure the no button starts inline; we'll switch to absolute when moving.
       let moving = false;
+      let movedToContainer = false;
+      let originalParent = noBtn.parentNode;
 
       function clamp(v, min, max){ return Math.max(min, Math.min(v, max)); }
 
@@ -175,56 +177,63 @@
         moving = true;
 
         // measure current sizes and positions
-        const parentRect = btnArea.getBoundingClientRect(); // use the buttons area as the positioning parent
+        const containerRect = container.getBoundingClientRect();
         const btnRect = noBtn.getBoundingClientRect();
 
-        // Compute current position relative to the btnArea parent
-        const currentLeft = btnRect.left - parentRect.left;
-        const currentTop = btnRect.top - parentRect.top;
+        // compute current position relative to the container (so we can preserve the visual spot)
+        const currentLeftRel = btnRect.left - containerRect.left;
+        const currentTopRel  = btnRect.top  - containerRect.top;
 
-        // When first switching to absolute, preserve visual position (relative to btnArea)
-        if (noBtn.style.position !== 'absolute') {
+        // On first move, move the button node into the container so absolute coords are relative to full container
+        if (!movedToContainer) {
+          // append to container (preserves visual position when we set absolute left/top)
+          container.appendChild(noBtn);
           noBtn.style.position = 'absolute';
-          // set initial left/top so conversion doesn't jump
-          noBtn.style.left = currentLeft + 'px';
-          noBtn.style.top = currentTop + 'px';
-          // make sure it sits above sibling elements
-          noBtn.style.zIndex = 10;
+          noBtn.style.left = currentLeftRel + 'px';
+          noBtn.style.top = currentTopRel + 'px';
+          noBtn.style.zIndex = 999;
+          movedToContainer = true;
         }
 
-        // small random delta so it only moves a little
-        const maxDeltaX = 40; // px
-        const maxDeltaY = 30; // px
-        const deltaX = (Math.random() * (maxDeltaX * 2)) - maxDeltaX;
-        const deltaY = (Math.random() * (maxDeltaY * 2)) - maxDeltaY;
-
-        // recalc btn size (width/height should be stable)
+        // get updated size after reparenting (or if already absolute)
         const newBtnRect = noBtn.getBoundingClientRect();
         const btnW = newBtnRect.width;
         const btnH = newBtnRect.height;
 
-        // compute unclamped desired coordinates (relative to btnArea)
-        const desiredLeft = (parseFloat(noBtn.style.left) || currentLeft) + deltaX;
-        const desiredTop  = (parseFloat(noBtn.style.top)  || currentTop)  + deltaY;
+        // padding from edges
+        const pad = 12;
+        const maxLeft = Math.max(pad, containerRect.width - btnW - pad);
+        const maxTop  = Math.max(pad, containerRect.height - btnH - pad);
 
-        // clamp to btnArea bounds with small padding
-        const pad = 8;
-        const maxLeft = Math.max(pad, parentRect.width - btnW - pad);
-        const maxTop  = Math.max(pad, parentRect.height - btnH - pad);
+        // ensure we pick a spot that moves a reasonable distance (so it hops around)
+        const minDistance = Math.max(120, Math.min(containerRect.width, containerRect.height) * 0.18); // at least ~120px or relative
+        let targetLeft, targetTop, attempts = 0;
+        do {
+          targetLeft = Math.random() * (maxLeft - pad) + pad;
+          targetTop  = Math.random() * (maxTop - pad) + pad;
+          const dx = Math.abs(targetLeft - (parseFloat(noBtn.style.left) || currentLeftRel));
+          const dy = Math.abs(targetTop  - (parseFloat(noBtn.style.top)  || currentTopRel));
+          const dist = Math.hypot(dx, dy);
+          attempts++;
+          // avoid infinite loops; after some attempts accept smaller move
+          if (attempts > 10) break;
+        } while (Math.hypot(targetLeft - (parseFloat(noBtn.style.left) || currentLeftRel), targetTop - (parseFloat(noBtn.style.top) || currentTopRel)) < minDistance);
 
-        const finalLeft = clamp(desiredLeft, pad, maxLeft);
-        const finalTop  = clamp(desiredTop,  pad, maxTop);
+        // clamp final target (safety)
+        const finalLeft = clamp(targetLeft, pad, maxLeft);
+        const finalTop  = clamp(targetTop,  pad, maxTop);
 
-        // apply new coordinates (smooth transition is in CSS)
-        noBtn.style.left = Math.round(finalLeft) + 'px';
-        noBtn.style.top  = Math.round(finalTop)  + 'px';
-
-        // small transform bounce for feel
-        noBtn.style.transform = 'translateY(-3px)';
-        setTimeout(() => { noBtn.style.transform = ''; }, 180);
+        // apply new coordinates (smooth transition handled by CSS)
+        requestAnimationFrame(() => {
+          noBtn.style.left = Math.round(finalLeft) + 'px';
+          noBtn.style.top  = Math.round(finalTop)  + 'px';
+          // small jump/tilt for feel
+          noBtn.style.transform = 'translateY(-6px) scale(1.02)';
+          setTimeout(() => { noBtn.style.transform = ''; }, 260);
+        });
 
         // small timeout to prevent immediate retrigger
-        setTimeout(() => { moving = false; }, 350);
+        setTimeout(() => { moving = false; }, 500);
       }
 
       // Prevent the user from successfully clicking the "no" button:
@@ -236,16 +245,15 @@
 
       // If the user resizes the window, keep the no button inside bounds
       window.addEventListener('resize', () => {
-        // if currently absolute, reposition to ensure still in bounds
-        if (noBtn.style.position === 'absolute') {
-          const parent = noBtn.offsetParent || btnArea;
-          const parentRect = parent.getBoundingClientRect();
+        // ensure it's inside container bounds if absolute
+        if (movedToContainer && noBtn.style.position === 'absolute') {
+          const containerRect = container.getBoundingClientRect();
           const btnRect = noBtn.getBoundingClientRect();
           const left = parseFloat(noBtn.style.left) || 0;
           const top = parseFloat(noBtn.style.top) || 0;
-          const pad = 8;
-          const maxLeft = Math.max(pad, parentRect.width - btnRect.width - pad);
-          const maxTop = Math.max(pad, parentRect.height - btnRect.height - pad);
+          const pad = 12;
+          const maxLeft = Math.max(pad, containerRect.width - btnRect.width - pad);
+          const maxTop = Math.max(pad, containerRect.height - btnRect.height - pad);
           noBtn.style.left = clamp(left, pad, maxLeft) + 'px';
           noBtn.style.top  = clamp(top,  pad, maxTop) + 'px';
         }
@@ -292,12 +300,12 @@
       // small enhancement: if user keeps trying to click in center where the no button started,
       // ensure the no button moves away occasionally
       document.addEventListener('mousemove', (e) => {
-        // if mouse is very close to the no button (< 48px) move it
+        // if mouse is very close to the no button (< 56px) move it
         const btnRect = noBtn.getBoundingClientRect();
         const dx = e.clientX - (btnRect.left + btnRect.width/2);
         const dy = e.clientY - (btnRect.top + btnRect.height/2);
         const dist = Math.sqrt(dx*dx + dy*dy);
-        if (dist < 48) moveNoButton();
+        if (dist < 56) moveNoButton();
       });
 
       // Place initial positions for small viewports so the "no" button is visible
