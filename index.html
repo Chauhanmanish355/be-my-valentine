@@ -261,12 +261,16 @@
 
       // Yes button click -> reveal final message and celebration
       yesBtn.addEventListener('click', () => {
-        // update message
-        message.textContent = "Shivani, you are mine now";
+        // update message to a romantic line with emoji
+        message.innerHTML = 'Shivani — my heart is yours, today and always <span aria-hidden="true">❤️</span>';
         message.classList.add('celebrate');
 
-        // hide buttons (no more choices)
+        // hide the buttons container
         btnArea.style.display = 'none';
+        // also ensure the no button (if moved elsewhere) is hidden
+        if (noBtn && noBtn.style) { noBtn.style.display = 'none'; }
+        // hide the yes button if it's still visible
+        if (yesBtn && yesBtn.style) { yesBtn.style.display = 'none'; }
 
         // spawn floating hearts from behind the message
         spawnHearts(18);
