@@ -68,7 +68,7 @@
       justify-content:center;
       align-items:center;
       margin-top:6px;
-      position:relative; /* keep layout for yes button */
+      position:relative; /* keep layout for yes button and serve as positioning parent */
       height:56px; /* space for moving button */
     }
 
@@ -175,20 +175,20 @@
         moving = true;
 
         // measure current sizes and positions
-        const containerRect = container.getBoundingClientRect();
+        const parentRect = btnArea.getBoundingClientRect(); // use the buttons area as the positioning parent
         const btnRect = noBtn.getBoundingClientRect();
 
-        // Compute current position relative to the container
-        const currentLeft = btnRect.left - containerRect.left;
-        const currentTop = btnRect.top - containerRect.top;
+        // Compute current position relative to the btnArea parent
+        const currentLeft = btnRect.left - parentRect.left;
+        const currentTop = btnRect.top - parentRect.top;
 
-        // When first switching to absolute, preserve visual position
+        // When first switching to absolute, preserve visual position (relative to btnArea)
         if (noBtn.style.position !== 'absolute') {
           noBtn.style.position = 'absolute';
           // set initial left/top so conversion doesn't jump
           noBtn.style.left = currentLeft + 'px';
           noBtn.style.top = currentTop + 'px';
-          // make sure it sits above other elements
+          // make sure it sits above sibling elements
           noBtn.style.zIndex = 10;
         }
 
@@ -203,14 +203,14 @@
         const btnW = newBtnRect.width;
         const btnH = newBtnRect.height;
 
-        // compute unclamped desired coordinates
+        // compute unclamped desired coordinates (relative to btnArea)
         const desiredLeft = (parseFloat(noBtn.style.left) || currentLeft) + deltaX;
         const desiredTop  = (parseFloat(noBtn.style.top)  || currentTop)  + deltaY;
 
-        // clamp to container bounds with small padding
+        // clamp to btnArea bounds with small padding
         const pad = 8;
-        const maxLeft = Math.max(pad, containerRect.width - btnW - pad);
-        const maxTop  = Math.max(pad, containerRect.height - btnH - pad);
+        const maxLeft = Math.max(pad, parentRect.width - btnW - pad);
+        const maxTop  = Math.max(pad, parentRect.height - btnH - pad);
 
         const finalLeft = clamp(desiredLeft, pad, maxLeft);
         const finalTop  = clamp(desiredTop,  pad, maxTop);
@@ -238,13 +238,14 @@
       window.addEventListener('resize', () => {
         // if currently absolute, reposition to ensure still in bounds
         if (noBtn.style.position === 'absolute') {
-          const containerRect = container.getBoundingClientRect();
+          const parent = noBtn.offsetParent || btnArea;
+          const parentRect = parent.getBoundingClientRect();
           const btnRect = noBtn.getBoundingClientRect();
           const left = parseFloat(noBtn.style.left) || 0;
           const top = parseFloat(noBtn.style.top) || 0;
           const pad = 8;
-          const maxLeft = Math.max(pad, containerRect.width - btnRect.width - pad);
-          const maxTop = Math.max(pad, containerRect.height - btnRect.height - pad);
+          const maxLeft = Math.max(pad, parentRect.width - btnRect.width - pad);
+          const maxTop = Math.max(pad, parentRect.height - btnRect.height - pad);
           noBtn.style.left = clamp(left, pad, maxLeft) + 'px';
           noBtn.style.top  = clamp(top,  pad, maxTop) + 'px';
         }
