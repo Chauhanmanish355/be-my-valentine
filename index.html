@@ -1,9 +1,285 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <title>Document</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Will you be my valentine?</title>
+  <style>
+    :root{
+      --bg: #ffe6f0;
+      --card: #fff6fb;
+      --accent: #ff476f;
+      --accent-dark: #e3003a;
+      --muted: #6b2230;
+    }
+
+    html,body{
+      height:100%;
+      margin:0;
+      font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: radial-gradient(circle at 10% 10%, #fff0f5 0%, var(--bg) 35%), var(--bg);
+      color:var(--muted);
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+    }
+
+    .container{
+      min-height:100vh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      position:relative;
+      overflow:hidden;
+    }
+
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,246,250,0.95));
+      border-radius:18px;
+      padding:36px 40px;
+      text-align:center;
+      box-shadow: 0 10px 40px rgba(227,0,58,0.08), 0 4px 10px rgba(0,0,0,0.05);
+      max-width:720px;
+      width:90%;
+      transform: translateY(-10px);
+    }
+
+    h1{
+      margin:0 0 22px;
+      font-size:clamp(20px, 3.8vw, 40px);
+      line-height:1.05;
+      letter-spacing:0.2px;
+      color:var(--accent-dark);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:12px;
+    }
+
+    .subtext{
+      margin:0 0 18px;
+      color:#873248;
+      opacity:0.95;
+      font-size:1rem;
+    }
+
+    .buttons{
+      display:flex;
+      gap:16px;
+      justify-content:center;
+      align-items:center;
+      margin-top:6px;
+      position:relative; /* keep layout for yes button */
+      height:56px; /* space for moving button */
+    }
+
+    .btn{
+      padding:12px 22px;
+      border-radius:999px;
+      border:0;
+      cursor:pointer;
+      font-weight:700;
+      font-size:1rem;
+      transition:transform .14s ease, box-shadow .14s ease;
+      box-shadow: 0 6px 18px rgba(227,0,58,0.08);
+      user-select:none;
+    }
+
+    .btn:active{ transform:scale(.98); }
+
+    .yes{
+      background: linear-gradient(180deg, #ff6fa3, var(--accent));
+      color:white;
+      text-shadow:0 1px 0 rgba(0,0,0,0.08);
+    }
+
+    .no{
+      background: linear-gradient(180deg, #fff1f6, #ffd6e6);
+      color:var(--accent-dark);
+      border:2px solid rgba(227,0,58,0.08);
+      position:relative; /* will be set to absolute when moving */
+      min-width:120px;
+    }
+
+    /* celebration style for the final message */
+    .celebrate{
+      color:var(--accent-dark);
+      text-shadow: 0 4px 18px rgba(255,71,111,0.18);
+      transform:scale(1.02);
+    }
+
+    /* floating hearts initial container (hidden duplicates for decoration) */
+    .decoration{
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      overflow:hidden;
+    }
+
+    .floating-heart{
+      position:absolute;
+      font-size:24px;
+      will-change:transform,opacity;
+      animation: floatUp linear forwards;
+      opacity:0;
+    }
+
+    @keyframes floatUp{
+      0%{ transform: translateY(10px) scale(.8); opacity:0; }
+      10%{ opacity:1; }
+      100%{ transform: translateY(-220px) scale(1.2); opacity:0; }
+    }
+
+    /* simple responsive tweaks */
+    @media (max-width:420px){
+      .card{ padding:26px; border-radius:14px; }
+      h1{ font-size:20px; }
+      .buttons{ gap:12px; height:64px; }
+      .btn{ padding:10px 14px; font-size:.95rem; }
+    }
+  </style>
 </head>
 <body>
-  <h1>Hello Shivani. This is Manish.</h1>
+  <div class="container">
+    <div class="card" id="card">
+      <h1 id="message">Shivani, will you be my valentine ? <span aria-hidden="true">💘</span></h1>
+      <p class="subtext">A tiny question from someone who thinks you're special ✨</p>
+
+      <div class="buttons" id="btnArea">
+        <button id="yesBtn" class="btn yes" type="button">OMG, Yes</button>
+        <button id="noBtn" class="btn no" type="button">Hell No</button>
+      </div>
+    </div>
+
+    <!-- decorative floating hearts will be appended here by JS -->
+    <div class="decoration" id="decoration" aria-hidden="true"></div>
+  </div>
+
+  <script>
+    (function(){
+      const yesBtn = document.getElementById('yesBtn');
+      const noBtn = document.getElementById('noBtn');
+      const message = document.getElementById('message');
+      const container = document.querySelector('.container');
+      const decoration = document.getElementById('decoration');
+      const btnArea = document.getElementById('btnArea');
+
+      // Ensure the no button starts inline; we'll switch to absolute when moving.
+      let moving = false;
+
+      function clamp(v, min, max){ return Math.max(min, Math.min(v, max)); }
+
+      function moveNoButton(){
+        if (moving) return;
+        moving = true;
+
+        // fade out
+        noBtn.style.transition = 'opacity .18s ease, left .28s ease, top .28s ease';
+        noBtn.style.opacity = 0;
+
+        setTimeout(() => {
+          // ensure noBtn is measured before positioning
+          const containerRect = container.getBoundingClientRect();
+          const btnRect = noBtn.getBoundingClientRect();
+
+          // set the button to absolute coordinates relative to the container
+          // convert current position to container coords if needed
+          // set position: absolute for free placement
+          noBtn.style.position = 'absolute';
+
+          const margin = 12; // px margin from edges
+          const maxLeft = Math.max(0, containerRect.width - btnRect.width - margin);
+          const maxTop = Math.max(0, containerRect.height - btnRect.height - margin);
+
+          // choose new random location within the container
+          const left = Math.floor(Math.random() * (maxLeft - 0 + 1)) + margin;
+          const top = Math.floor(Math.random() * (maxTop - 0 + 1)) + margin;
+
+          // apply new coordinates (relative to container)
+          noBtn.style.left = left + 'px';
+          noBtn.style.top = top + 'px';
+
+          // restore visibility
+          noBtn.style.opacity = 1;
+
+          // small timeout to prevent immediate re-trigger
+          setTimeout(() => { moving = false; }, 300);
+        }, 180);
+      }
+
+      // Prevent the user from successfully clicking the "no" button:
+      noBtn.addEventListener('mouseenter', moveNoButton);
+      noBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        moveNoButton();
+      });
+
+      // If the user resizes the window, keep the no button inside bounds
+      window.addEventListener('resize', () => {
+        // if currently absolute, reposition to ensure still in bounds
+        if (noBtn.style.position === 'absolute') {
+          const containerRect = container.getBoundingClientRect();
+          const btnRect = noBtn.getBoundingClientRect();
+          const left = parseFloat(noBtn.style.left) || 0;
+          const top = parseFloat(noBtn.style.top) || 0;
+          const maxLeft = Math.max(0, containerRect.width - btnRect.width - 12);
+          const maxTop = Math.max(0, containerRect.height - btnRect.height - 12);
+          noBtn.style.left = clamp(left, 12, maxLeft) + 'px';
+          noBtn.style.top  = clamp(top, 12, maxTop) + 'px';
+        }
+      });
+
+      // Yes button click -> reveal final message and celebration
+      yesBtn.addEventListener('click', () => {
+        // update message
+        message.textContent = "Shivani, you are mine now";
+        message.classList.add('celebrate');
+
+        // hide buttons (no more choices)
+        btnArea.style.display = 'none';
+
+        // spawn floating hearts
+        spawnHearts(18);
+      });
+
+      // Create some animated floating hearts for celebration
+      function spawnHearts(count){
+        const emojis = ['💖','💘','😍','💕','🥰','💞','💓'];
+        for (let i=0; i<count; i++){
+          const span = document.createElement('span');
+          span.className = 'floating-heart';
+          span.textContent = emojis[Math.floor(Math.random()*emojis.length)];
+          // random horizontal start between 10% and 90% of width
+          const startX = Math.random() * 100;
+          span.style.left = startX + '%';
+          // random delay so hearts appear in waves
+          const delay = Math.random() * 0.8;
+          const dur = 2.2 + Math.random()*1.6;
+          span.style.animationDuration = dur + 's';
+          span.style.animationDelay = delay + 's';
+          span.style.fontSize = (16 + Math.random()*28) + 'px';
+          decoration.appendChild(span);
+
+          // remove after animation finishes
+          setTimeout(() => {
+            span.remove();
+          }, (delay + dur) * 1000 + 300);
+        }
+      }
+
+      // small enhancement: if user keeps trying to click in center where the no button started,
+      // ensure the no button moves away occasionally
+      document.addEventListener('mousemove', (e) => {
+        // if mouse is very close to the no button (< 36px) move it
+        const btnRect = noBtn.getBoundingClientRect();
+        const dx = e.clientX - (btnRect.left + btnRect.width/2);
+        const dy = e.clientY - (btnRect.top + btnRect.height/2);
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < 48) moveNoButton();
+      });
+
+      // Place initial positions for small viewports so the "no" button is visible
+      // (No further action required)
+    })();
+  </script>
 </body>
 </html>
