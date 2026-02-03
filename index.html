@@ -41,7 +41,12 @@
       max-width:720px;
       width:90%;
       transform: translateY(-10px);
+      position: relative; /* make decoration absolute inside the card */
+      overflow: visible;
     }
+
+    /* ensure important content sits above decoration */
+    .card > :not(.decoration){ position: relative; z-index: 2; }
 
     h1{
       margin:0 0 22px;
@@ -70,6 +75,7 @@
       margin-top:6px;
       position:relative; /* keep layout for yes button */
       height:56px; /* space for moving button */
+      z-index:2;
     }
 
     .btn{
@@ -100,6 +106,7 @@
       min-width:120px;
       /* Smooth position transitions when we move it */
       transition: left .32s cubic-bezier(.2,.9,.2,1), top .32s cubic-bezier(.2,.9,.2,1), transform .12s ease;
+      z-index:2;
     }
 
     /* celebration style for the final message */
@@ -109,12 +116,13 @@
       transform:scale(1.02);
     }
 
-    /* floating hearts initial container (hidden duplicates for decoration) */
+    /* decoration placed inside the card so hearts can originate behind the message */
     .decoration{
       position:absolute;
       inset:0;
       pointer-events:none;
-      overflow:hidden;
+      overflow:visible;
+      z-index:1; /* behind the card content (which has z-index:2) */
     }
 
     .floating-heart{
@@ -123,12 +131,15 @@
       will-change:transform,opacity;
       animation: floatUp linear forwards;
       opacity:0;
+      transform-origin: center;
+      z-index:1;
+      text-shadow: 0 2px 10px rgba(255,71,111,0.12);
     }
 
     @keyframes floatUp{
-      0%{ transform: translateY(10px) scale(.8); opacity:0; }
-      10%{ opacity:1; }
-      100%{ transform: translateY(-220px) scale(1.2); opacity:0; }
+      0%{ transform: translateY(0) scale(.9); opacity:0; }
+      5%{ opacity:1; transform: translateY(-6px) scale(1); }
+      100%{ transform: translateY(-160px) scale(1.2); opacity:0; }
     }
 
     /* simple responsive tweaks */
@@ -150,10 +161,10 @@
         <button id="yesBtn" class="btn yes" type="button">OMG, Yes</button>
         <button id="noBtn" class="btn no" type="button">Hell No</button>
       </div>
-    </div>
 
-    <!-- decorative floating hearts will be appended here by JS -->
-    <div class="decoration" id="decoration" aria-hidden="true"></div>
+      <!-- decorative floating hearts will be appended here by JS (inside the card so they can appear behind the text) -->
+      <div class="decoration" id="decoration" aria-hidden="true"></div>
+    </div>
   </div>
 
   <script>
@@ -161,14 +172,13 @@
       const yesBtn = document.getElementById('yesBtn');
       const noBtn = document.getElementById('noBtn');
       const message = document.getElementById('message');
-      const container = document.querySelector('.container');
+      const card = document.getElementById('card');
       const decoration = document.getElementById('decoration');
       const btnArea = document.getElementById('btnArea');
 
       // Ensure the no button starts inline; we'll switch to absolute when moving.
       let moving = false;
       let movedToContainer = false;
-      let originalParent = noBtn.parentNode;
 
       function clamp(v, min, max){ return Math.max(min, Math.min(v, max)); }
 
@@ -176,18 +186,17 @@
         if (moving) return;
         moving = true;
 
-        // measure current sizes and positions
-        const containerRect = container.getBoundingClientRect();
+        // measure current sizes and positions relative to the page
+        const containerRect = document.querySelector('.container').getBoundingClientRect();
         const btnRect = noBtn.getBoundingClientRect();
 
         // compute current position relative to the container (so we can preserve the visual spot)
         const currentLeftRel = btnRect.left - containerRect.left;
-        const currentTopRel  = btnRect.top  - containerRect.top;
+        const currentTopRel  = btnRect.top - containerRect.top;
 
         // On first move, move the button node into the container so absolute coords are relative to full container
         if (!movedToContainer) {
-          // append to container (preserves visual position when we set absolute left/top)
-          container.appendChild(noBtn);
+          document.querySelector('.container').appendChild(noBtn);
           noBtn.style.position = 'absolute';
           noBtn.style.left = currentLeftRel + 'px';
           noBtn.style.top = currentTopRel + 'px';
@@ -195,45 +204,37 @@
           movedToContainer = true;
         }
 
-        // get updated size after reparenting (or if already absolute)
-        const newBtnRect = noBtn.getBoundingClientRect();
-        const btnW = newBtnRect.width;
-        const btnH = newBtnRect.height;
-
-        // padding from edges
+        // pick a random spot within the container, but keep minimum hop distance for "here-and-there" effect
+        const contRect = document.querySelector('.container').getBoundingClientRect();
+        const btnW = btnRect.width;
+        const btnH = btnRect.height;
         const pad = 12;
-        const maxLeft = Math.max(pad, containerRect.width - btnW - pad);
-        const maxTop  = Math.max(pad, containerRect.height - btnH - pad);
+        const maxLeft = Math.max(pad, contRect.width - btnW - pad);
+        const maxTop  = Math.max(pad, contRect.height - btnH - pad);
 
-        // ensure we pick a spot that moves a reasonable distance (so it hops around)
-        const minDistance = Math.max(120, Math.min(containerRect.width, containerRect.height) * 0.18); // at least ~120px or relative
+        const minDistance = Math.max(160, Math.min(contRect.width, contRect.height) * 0.18);
         let targetLeft, targetTop, attempts = 0;
+        const currentLeft = parseFloat(noBtn.style.left) || currentLeftRel;
+        const currentTop  = parseFloat(noBtn.style.top)  || currentTopRel;
+
         do {
           targetLeft = Math.random() * (maxLeft - pad) + pad;
           targetTop  = Math.random() * (maxTop - pad) + pad;
-          const dx = Math.abs(targetLeft - (parseFloat(noBtn.style.left) || currentLeftRel));
-          const dy = Math.abs(targetTop  - (parseFloat(noBtn.style.top)  || currentTopRel));
-          const dist = Math.hypot(dx, dy);
           attempts++;
-          // avoid infinite loops; after some attempts accept smaller move
-          if (attempts > 10) break;
-        } while (Math.hypot(targetLeft - (parseFloat(noBtn.style.left) || currentLeftRel), targetTop - (parseFloat(noBtn.style.top) || currentTopRel)) < minDistance);
+          if (attempts > 12) break;
+        } while (Math.hypot(targetLeft - currentLeft, targetTop - currentTop) < minDistance);
 
-        // clamp final target (safety)
         const finalLeft = clamp(targetLeft, pad, maxLeft);
-        const finalTop  = clamp(targetTop,  pad, maxTop);
+        const finalTop  = clamp(targetTop, pad, maxTop);
 
-        // apply new coordinates (smooth transition handled by CSS)
         requestAnimationFrame(() => {
           noBtn.style.left = Math.round(finalLeft) + 'px';
           noBtn.style.top  = Math.round(finalTop)  + 'px';
-          // small jump/tilt for feel
           noBtn.style.transform = 'translateY(-6px) scale(1.02)';
           setTimeout(() => { noBtn.style.transform = ''; }, 260);
         });
 
-        // small timeout to prevent immediate retrigger
-        setTimeout(() => { moving = false; }, 500);
+        setTimeout(() => { moving = false; }, 520);
       }
 
       // Prevent the user from successfully clicking the "no" button:
@@ -245,15 +246,14 @@
 
       // If the user resizes the window, keep the no button inside bounds
       window.addEventListener('resize', () => {
-        // ensure it's inside container bounds if absolute
         if (movedToContainer && noBtn.style.position === 'absolute') {
-          const containerRect = container.getBoundingClientRect();
-          const btnRect = noBtn.getBoundingClientRect();
+          const contRect = document.querySelector('.container').getBoundingClientRect();
+          const btnRectNow = noBtn.getBoundingClientRect();
           const left = parseFloat(noBtn.style.left) || 0;
           const top = parseFloat(noBtn.style.top) || 0;
           const pad = 12;
-          const maxLeft = Math.max(pad, containerRect.width - btnRect.width - pad);
-          const maxTop = Math.max(pad, containerRect.height - btnRect.height - pad);
+          const maxLeft = Math.max(pad, contRect.width - btnRectNow.width - pad);
+          const maxTop = Math.max(pad, contRect.height - btnRectNow.height - pad);
           noBtn.style.left = clamp(left, pad, maxLeft) + 'px';
           noBtn.style.top  = clamp(top,  pad, maxTop) + 'px';
         }
@@ -268,26 +268,41 @@
         // hide buttons (no more choices)
         btnArea.style.display = 'none';
 
-        // spawn floating hearts
+        // spawn floating hearts from behind the message
         spawnHearts(18);
       });
 
       // Create some animated floating hearts for celebration
       function spawnHearts(count){
         const emojis = ['💖','💘','😍','💕','🥰','💞','💓'];
+
+        // compute card and message positions so hearts appear around the text
+        const cardRect = card.getBoundingClientRect();
+        const messageRect = message.getBoundingClientRect();
+
         for (let i=0; i<count; i++){
           const span = document.createElement('span');
           span.className = 'floating-heart';
           span.textContent = emojis[Math.floor(Math.random()*emojis.length)];
-          // random horizontal start between 10% and 90% of width
-          const startX = Math.random() * 100;
-          span.style.left = startX + '%';
-          // random delay so hearts appear in waves
-          const delay = Math.random() * 0.8;
-          const dur = 2.2 + Math.random()*1.6;
+
+          // random x within the message width (with some spread)
+          const spreadX = Math.max(12, messageRect.width * 0.6);
+          const cx = (messageRect.left - cardRect.left) + (messageRect.width/2) + (Math.random() * spreadX - spreadX/2);
+
+          // random y around the message line (slightly below the text baseline)
+          const spreadY = Math.max(8, messageRect.height * 0.6);
+          const cy = (messageRect.top - cardRect.top) + (messageRect.height/2) + (Math.random() * spreadY - spreadY/2);
+
+          span.style.left = Math.round(cx) + 'px';
+          span.style.top  = Math.round(cy) + 'px';
+
+          // random delay and duration
+          const delay = Math.random() * 0.6;
+          const dur = 1.8 + Math.random()*1.2;
           span.style.animationDuration = dur + 's';
           span.style.animationDelay = delay + 's';
-          span.style.fontSize = (16 + Math.random()*28) + 'px';
+          span.style.fontSize = (14 + Math.random()*30) + 'px';
+
           decoration.appendChild(span);
 
           // remove after animation finishes
@@ -300,16 +315,12 @@
       // small enhancement: if user keeps trying to click in center where the no button started,
       // ensure the no button moves away occasionally
       document.addEventListener('mousemove', (e) => {
-        // if mouse is very close to the no button (< 56px) move it
         const btnRect = noBtn.getBoundingClientRect();
         const dx = e.clientX - (btnRect.left + btnRect.width/2);
         const dy = e.clientY - (btnRect.top + btnRect.height/2);
         const dist = Math.sqrt(dx*dx + dy*dy);
         if (dist < 56) moveNoButton();
       });
-
-      // Place initial positions for small viewports so the "no" button is visible
-      // (No further action required)
     })();
   </script>
 </body>
